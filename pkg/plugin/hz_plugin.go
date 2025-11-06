@@ -406,9 +406,12 @@ func (p *HZPlugin) generateMessage(g *protogen.GeneratedFile, message *protogen.
 func (p *HZPlugin) generateHTTPCode() error {
     p.logger.Debugf("Generating HTTP code with args: %+v", p.args)
 
+    // 自动检测命令类型（如果项目已存在则为update，否则为new）
+    cmdType := p.autoDetectCommand()
+
     // 创建HTTP包生成器
     pkgGen := &generator.HTTPPackageGenerator{
-        CmdType:        p.args.CmdType,
+        CmdType:        cmdType,
         ProjPackage:    p.args.Gomod,
         HandlerDir:     p.args.HandlerDir,
         RouterDir:      p.args.RouterDir,
