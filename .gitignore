@@ -17,6 +17,11 @@ coverage.*
 *.coverprofile
 profile.cov
 
+# Go binary and archive files
+go*.tar.gz
+protoc-gen-*
+*.zip
+
 # Dependency directories (remove the comment below to include it)
 # vendor/
 

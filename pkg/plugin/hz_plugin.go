@@ -18,6 +18,7 @@ package plugin
 
 import (
     "fmt"
+    "os"
     "path/filepath"
     "strings"
 
@@ -62,19 +63,22 @@ func (p *HZPlugin) Run() error {
 
     p.logger.Debug("HZ protoc plugin started")
 
-    // 根据命令类型执行不同的操作
-    switch p.args.CmdType {
+    // 如果只生成模型代码
+    if p.args.OnlyModel {
+        return p.handleModelCommand()
+    }
+
+    // 自动检测命令类型：如果项目已存在则为update，否则为new
+    cmdType := p.autoDetectCommand()
+    p.logger.Infof("Auto-detected command type: %s", cmdType)
+
+    switch cmdType {
     case meta.CmdNew:
         return p.handleNewCommand()
     case meta.CmdUpdate:
         return p.handleUpdateCommand()
-    case meta.CmdModel:
-        return p.handleModelCommand()
-    case meta.CmdClient:
-        return p.handleClientCommand()
     default:
-        // 默认行为：生成所有代码
-        return p.handleDefault()
+        return p.handleNewCommand()
     }
 }
 
@@ -82,22 +86,69 @@ func (p *HZPlugin) Run() error {
 func (p *HZPlugin) parseArgs() error {
     // 从protogen插件获取参数
     param := p.gen.Request.GetParameter()
-    if param == "" {
-        param = "model=true" // 默认生成模型
-    }
 
     p.args = &config.Argument{}
-    params := strings.Split(param, ",")
-    if err := p.args.Unpack(params); err != nil {
+    if param != "" {
+        params := strings.Split(param, ",")
+        if err := p.args.Unpack(params); err != nil {
+            return err
+        }
+    }
+
+    // 从proto文件的go_package选项提取go module
+    if err := p.extractGoModuleFromProto(); err != nil {
         return err
     }
 
-    // 设置默认值
-    if p.args.CmdType == "" {
-        p.args.CmdType = meta.CmdNew
+    return nil
+}
+
+// extractGoModuleFromProto 从proto文件的go_package选项提取go module
+func (p *HZPlugin) extractGoModuleFromProto() error {
+    if len(p.gen.Files) == 0 {
+        return fmt.Errorf("no proto files to generate")
     }
 
-    return nil
+    for _, file := range p.gen.Files {
+        if file.Generate && file.Proto != nil {
+            goPackage := file.Proto.GetOptions().GetGoPackage()
+            if goPackage != "" {
+                // go_package通常是"path/to/module/package"的形式
+                // 我们需要提取到最后一个"/"处作为module path
+                if p.args.Gomod == "" {
+                    p.args.Gomod = goPackage
+                }
+                p.logger.Debugf("Extracted go_package from proto: %s", goPackage)
+                return nil
+            }
+        }
+    }
+
+    return fmt.Errorf("no go_package option found in proto files")
+}
+
+// autoDetectCommand 自动检测命令类型
+func (p *HZPlugin) autoDetectCommand() string {
+    // 检查项目是否已存在：检查go.mod或关键目录是否存在
+    // 如果handler或router目录存在，认为项目已存在
+    outDir := p.args.OutDir
+    if outDir == "" || outDir == "." {
+        outDir = "."
+    }
+
+    handlerPath := filepath.Join(outDir, p.args.HandlerDir)
+    routerPath := filepath.Join(outDir, p.args.RouterDir)
+
+    _, handlerExists := os.Stat(handlerPath)
+    _, routerExists := os.Stat(routerPath)
+
+    if handlerExists == nil || routerExists == nil {
+        // 至少一个目录存在，认为是update
+        return meta.CmdUpdate
+    }
+
+    // 否则是new
+    return meta.CmdNew
 }
 
 // handleNewCommand 处理new命令，生成项目布局和代码
