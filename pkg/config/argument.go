@@ -26,8 +26,6 @@ import (
 
 // Argument 是插件参数配置，基于hz的Argument但简化
 type Argument struct {
-    // 基本命令参数
-    CmdType    string   // 命令类型: new, update, model, client
     Verbose    bool     // 详细输出
     OutDir     string   // 输出目录
     HandlerDir string   // handler目录
@@ -36,8 +34,8 @@ type Argument struct {
     ClientDir  string   // client目录
     BaseDomain string   // 请求域名
 
-    // Go模块相关
-    Gomod       string // Go模块名
+    // Go模块相关 - 自动从proto的go_package提取
+    Gomod       string // Go模块名（从proto自动提取）
     ServiceName string // 服务名
     Use         string // 使用第三方模型包
     NeedGoMod   bool   // 是否需要生成go.mod
@@ -59,6 +57,7 @@ type Argument struct {
     HandlerByMethod      bool     // 按方法生成handler文件
     SortRouter           bool     // 排序路由代码
     ForceUpdateClient    bool     // 强制更新客户端代码
+    OnlyModel            bool     // 仅生成模型代码
 
     // 自定义选项
     CustomizeLayout  string // 自定义布局模板路径
@@ -122,8 +121,6 @@ func (arg *Argument) parseParam(param string) error {
     value := strings.TrimSpace(parts[1])
 
     switch key {
-    case "command", "cmd":
-        arg.CmdType = value
     case "verbose":
         arg.Verbose = value == "true" || value == "1"
     case "out_dir":
@@ -138,8 +135,6 @@ func (arg *Argument) parseParam(param string) error {
         arg.ClientDir = value
     case "base_domain":
         arg.BaseDomain = value
-    case "module", "go_module":
-        arg.Gomod = value
     case "service":
         arg.ServiceName = value
     case "use":
@@ -147,10 +142,7 @@ func (arg *Argument) parseParam(param string) error {
     case "need_go_mod":
         arg.NeedGoMod = value == "true" || value == "1"
     case "model":
-        // model=true表示生成模型代码
-        if value == "false" || value == "0" {
-            // 不生成模型代码的标志
-        }
+        arg.OnlyModel = value == "true" || value == "1"
     case "json_enumstr":
         arg.JSONEnumStr = value == "true" || value == "1"
     case "query_enumint":
@@ -223,8 +215,8 @@ func (arg *Argument) GetModelDir() (string, error) {
 
 // Validate 验证参数
 func (arg *Argument) Validate() error {
-    if arg.Gomod == "" && arg.CmdType == meta.CmdNew {
-        return fmt.Errorf("go module is required for new command")
+    if arg.Gomod == "" {
+        return fmt.Errorf("go module is required (should be auto-extracted from proto go_package option)")
     }
     
     if arg.OutDir == "" {
