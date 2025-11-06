@@ -1,4 +1,4 @@
-# protoc-gen-hz
+# protoc-gen-go-hz
 
 [English](./README.md) | [中文](#中文文档)
 
@@ -26,13 +26,13 @@
 使用 go install 方式安装最新版本：
 
 ```bash
-go install github.com/ca-x/protoc-gen-hz@latest
+go install github.com/ca-x/protoc-gen-go-hz@latest
 ```
 
 ##### 基本用法
 
 ```bash
-protoc --hertz_out=. example.proto
+protoc --go-hz_out=. example.proto
 ```
 
 该命令会根据现有项目结构自动判断操作类型：
@@ -44,7 +44,7 @@ protoc --hertz_out=. example.proto
 ###### 生成新项目
 
 ```bash
-protoc --hertz_out=out_dir=. example.proto
+protoc --go-hz_out=out_dir=. example.proto
 ```
 
 生成的项目结构如下：
@@ -67,13 +67,13 @@ protoc --hertz_out=out_dir=. example.proto
 ###### 只生成模型代码
 
 ```bash
-protoc --hertz_out=. --hertz_opt=model=true example.proto
+protoc --go-hz_out=. --go-hz_opt=model=true example.proto
 ```
 
 ###### 生成客户端代码
 
 ```bash
-protoc --hertz_out=. --hertz_opt=client_dir=biz/client example.proto
+protoc --go-hz_out=. --go-hz_opt=client_dir=biz/client example.proto
 ```
 
 ##### 参数选项
@@ -136,18 +136,95 @@ message HelloReply {
 4. **模块化设计**: 清晰分离不同的生成功能
 5. **自动检测**: 自动从 proto 文件提取模块信息和命令类型
 
+##### 在 Buf 中使用
+
+你也可以在 [Buf](https://buf.build/) 中使用 protoc-gen-go-hz，这是一个现代化的 Protocol Buffers 工具。
+
+###### 安装
+
+首先安装插件：
+
+```bash
+go install github.com/ca-x/protoc-gen-go-hz@latest
+```
+
+###### 配置 buf.yaml
+
+在项目根目录创建 `buf.yaml` 文件：
+
+```yaml
+version: v1
+deps:
+  - buf.build/googleapis/googleapis
+lint:
+  use:
+    - DEFAULT
+breaking:
+  use:
+    - FILE
+```
+
+###### 配置 buf.gen.yaml
+
+创建 `buf.gen.yaml` 文件来配置代码生成：
+
+```yaml
+version: v1
+plugins:
+  - plugin: go
+    out: gen/go
+    opt:
+      - paths=source_relative
+  - plugin: go-hz
+    out: .
+    opt:
+      - model=true  # 只生成模型代码
+      # - handler_dir=biz/handler
+      # - router_dir=biz/router
+      # - client_dir=biz/client
+```
+
+###### 生成代码
+
+运行以下命令生成代码：
+
+```bash
+buf generate
+```
+
+这将在指定目录中生成标准的 protobuf Go 代码和 Hertz HTTP 代码。
+
+###### 完整项目生成的 buf.gen.yaml 示例
+
+```yaml
+version: v1
+plugins:
+  - plugin: go
+    out: gen/go
+    opt:
+      - paths=source_relative
+  - plugin: go-hz
+    out: .
+    opt:
+      - handler_dir=biz/handler
+      - router_dir=biz/router
+      - model_dir=biz/model
+      - client_dir=biz/client
+      - need_go_mod=true
+```
+
 #### 开发
 
 ##### 构建项目
 
 ```bash
-go build -o protoc-gen-hz .
+go build -o protoc-gen-go-hz .
 ```
 
 ##### 测试插件
 
 ```bash
-protoc --hertz_out=. example.proto
+protoc --go-hz_out=. example.proto
 ```
 
 #### 依赖

@@ -1,4 +1,4 @@
-# protoc-gen-hz
+# protoc-gen-go-hz
 
 [English](#english-documentation) | [中文](./README_CN.md)
 
@@ -24,13 +24,13 @@ This is a protoc plugin based on [CloudWeGo Hertz](https://github.com/cloudwego/
 Install the latest version using go install:
 
 ```bash
-go install github.com/ca-x/protoc-gen-hz@latest
+go install github.com/ca-x/protoc-gen-go-hz@latest
 ```
 
 #### Basic Usage
 
 ```bash
-protoc --hertz_out=. example.proto
+protoc --go-hz_out=. example.proto
 ```
 
 This command will automatically determine the operation type based on the existing project structure:
@@ -42,7 +42,7 @@ This command will automatically determine the operation type based on the existi
 ##### Generate a New Project
 
 ```bash
-protoc --hertz_out=out_dir=. example.proto
+protoc --go-hz_out=out_dir=. example.proto
 ```
 
 The generated project structure will be:
@@ -65,13 +65,13 @@ The generated project structure will be:
 ##### Generate Model Code Only
 
 ```bash
-protoc --hertz_out=. --hertz_opt=model=true example.proto
+protoc --go-hz_out=. --go-hz_opt=model=true example.proto
 ```
 
 ##### Generate Client Code
 
 ```bash
-protoc --hertz_out=. --hertz_opt=client_dir=biz/client example.proto
+protoc --go-hz_out=. --go-hz_opt=client_dir=biz/client example.proto
 ```
 
 #### Parameter Options
@@ -134,18 +134,95 @@ message HelloReply {
 4. **Modular Design**: Clear separation of different generation functions
 5. **Automatic Detection**: Automatically extract module information and command type from proto files
 
+### Usage with Buf
+
+You can also use protoc-gen-go-hz with [Buf](https://buf.build/), a modern tool for Protocol Buffers.
+
+#### Installation
+
+First, install the plugin:
+
+```bash
+go install github.com/ca-x/protoc-gen-go-hz@latest
+```
+
+#### Configure buf.yaml
+
+Create a `buf.yaml` file in your project root:
+
+```yaml
+version: v1
+deps:
+  - buf.build/googleapis/googleapis
+lint:
+  use:
+    - DEFAULT
+breaking:
+  use:
+    - FILE
+```
+
+#### Configure buf.gen.yaml
+
+Create a `buf.gen.yaml` file to configure code generation:
+
+```yaml
+version: v1
+plugins:
+  - plugin: go
+    out: gen/go
+    opt:
+      - paths=source_relative
+  - plugin: go-hz
+    out: .
+    opt:
+      - model=true  # Generate model code only
+      # - handler_dir=biz/handler
+      # - router_dir=biz/router
+      # - client_dir=biz/client
+```
+
+#### Generate Code
+
+Run the following command to generate code:
+
+```bash
+buf generate
+```
+
+This will generate both the standard protobuf Go code and the Hertz HTTP code in the specified directories.
+
+#### Example buf.gen.yaml for Full Project Generation
+
+```yaml
+version: v1
+plugins:
+  - plugin: go
+    out: gen/go
+    opt:
+      - paths=source_relative
+  - plugin: go-hz
+    out: .
+    opt:
+      - handler_dir=biz/handler
+      - router_dir=biz/router
+      - model_dir=biz/model
+      - client_dir=biz/client
+      - need_go_mod=true
+```
+
 ### Development
 
 #### Build the Project
 
 ```bash
-go build -o protoc-gen-hz .
+go build -o protoc-gen-go-hz .
 ```
 
 #### Test the Plugin
 
 ```bash
-protoc --hertz_out=. example.proto
+protoc --go-hz_out=. example.proto
 ```
 
 ### Dependencies

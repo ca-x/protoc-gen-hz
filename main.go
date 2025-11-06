@@ -19,7 +19,7 @@ package main
 import (
     "os"
 
-    "github.com/ca-x/protoc-gen-hz/pkg/plugin"
+    "github.com/ca-x/protoc-gen-go-hz/pkg/plugin"
     "github.com/sirupsen/logrus"
     "google.golang.org/protobuf/compiler/protogen"
 )
