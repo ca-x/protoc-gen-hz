@@ -1,4 +1,4 @@
-# protoc-gen-hertz
+# protoc-gen-hz
 
 [English](./README.md) | [中文](#中文文档)
 
@@ -141,7 +141,7 @@ message HelloReply {
 ##### 构建项目
 
 ```bash
-go build -o protoc-gen-hertz .
+go build -o protoc-gen-hz .
 ```
 
 ##### 测试插件

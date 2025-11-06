@@ -1,4 +1,4 @@
-# protoc-gen-hertz
+# protoc-gen-hz
 
 [English](#english-documentation) | [中文](./README_CN.md)
 
@@ -139,7 +139,7 @@ message HelloReply {
 #### Build the Project
 
 ```bash
-go build -o protoc-gen-hertz .
+go build -o protoc-gen-hz .
 ```
 
 #### Test the Plugin
