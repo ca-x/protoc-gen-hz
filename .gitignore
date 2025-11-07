@@ -34,6 +34,6 @@ _testmain.go
 /output
 *.local.yml
 dumped_hertz_remote_config.json
-./example/biz
+./example/biz/*
 ./example/*.go
 ./example/example
