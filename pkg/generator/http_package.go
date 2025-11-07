@@ -17,169 +17,172 @@
 package generator
 
 import (
-    "github.com/cloudwego/hertz/cmd/hz/generator/model"
+	"github.com/ca-x/protoc-gen-go-hz/pkg/version"
+	"github.com/cloudwego/hertz/cmd/hz/generator/model"
 )
 
 // HTTPPackageGenerator HTTP包生成器，封装hz的HttpPackageGenerator
 type HTTPPackageGenerator struct {
-    ConfigPath     string
-    CmdType        string
-    ProjPackage    string
-    HandlerDir     string
-    RouterDir      string
-    ModelDir       string
-    UseDir         string
-    ClientDir      string
-    IdlClientDir   string
-    ForceClientDir string
-    BaseDomain     string
-    QueryEnumAsInt bool
-    ServiceGenDir  string
+	ConfigPath     string
+	CmdType        string
+	ProjPackage    string
+	HandlerDir     string
+	RouterDir      string
+	ModelDir       string
+	UseDir         string
+	ClientDir      string
+	IdlClientDir   string
+	ForceClientDir string
+	BaseDomain     string
+	QueryEnumAsInt bool
+	ServiceGenDir  string
 
-    NeedModel            bool
-    HandlerByMethod      bool
-    SnakeStyleMiddleware bool
-    SortRouter           bool
-    ForceUpdateClient    bool
+	NeedModel            bool
+	HandlerByMethod      bool
+	SnakeStyleMiddleware bool
+	SortRouter           bool
+	ForceUpdateClient    bool
 
-    TemplateGenerator
+	TemplateGenerator
 }
 
 // HTTPPackage HTTP包数据结构
 type HTTPPackage struct {
-    IdlName    string
-    Package    string
-    Services   []*Service
-    Models     []*model.Model
-    RouterInfo *Router
+	IdlName    string
+	Package    string
+	Services   []*Service
+	Models     []*model.Model
+	RouterInfo *Router
 }
 
 // Service 服务结构
 type Service struct {
-    Name          string
-    Methods       []*HTTPMethod
-    ClientMethods []*ClientMethod
-    Models        []*model.Model
-    BaseDomain    string
-    ServiceGroup  string
-    ServiceGenDir string
+	Name          string
+	Methods       []*HTTPMethod
+	ClientMethods []*ClientMethod
+	Models        []*model.Model
+	BaseDomain    string
+	ServiceGroup  string
+	ServiceGenDir string
 }
 
 // HTTPMethod HTTP方法结构
 type HTTPMethod struct {
-    Name         string
-    HTTPMethod   string
-    Path         string
-    RequestType  string
-    ResponseType string
+	Name         string
+	HTTPMethod   string
+	Path         string
+	RequestType  string
+	ResponseType string
 }
 
 // ClientMethod 客户端方法结构
 type ClientMethod struct {
-    Name         string
-    HTTPMethod   string
-    Path         string
-    RequestType  string
-    ResponseType string
+	Name         string
+	HTTPMethod   string
+	Path         string
+	RequestType  string
+	ResponseType string
 }
 
 // Router 路由信息
 type Router struct {
-    Registers []string
+	Registers []string
 }
 
 // Init 初始化生成器
 func (pkgGen *HTTPPackageGenerator) Init() error {
-    // 这里应该调用hz的初始化逻辑
-    // 为了简化，我们暂时返回nil
-    return nil
+	// 这里应该调用hz的初始化逻辑
+	// 为了简化，我们暂时返回nil
+	return nil
 }
 
 // Generate 生成HTTP代码
 func (pkgGen *HTTPPackageGenerator) Generate(httpPkg *HTTPPackage) ([]*GeneratedFile, error) {
-    var files []*GeneratedFile
+	var files []*GeneratedFile
 
-    // 生成handler代码
-    handlerFiles, err := pkgGen.generateHandlers(httpPkg)
-    if err != nil {
-        return nil, err
-    }
-    files = append(files, handlerFiles...)
+	// 生成handler代码
+	handlerFiles, err := pkgGen.generateHandlers(httpPkg)
+	if err != nil {
+		return nil, err
+	}
+	files = append(files, handlerFiles...)
 
-    // 生成router代码
-    routerFiles, err := pkgGen.generateRouters(httpPkg)
-    if err != nil {
-        return nil, err
-    }
-    files = append(files, routerFiles...)
+	// 生成router代码
+	routerFiles, err := pkgGen.generateRouters(httpPkg)
+	if err != nil {
+		return nil, err
+	}
+	files = append(files, routerFiles...)
 
-    // 生成client代码
-    clientFiles, err := pkgGen.generateClients(httpPkg)
-    if err != nil {
-        return nil, err
-    }
-    files = append(files, clientFiles...)
+	// 生成client代码
+	clientFiles, err := pkgGen.generateClients(httpPkg)
+	if err != nil {
+		return nil, err
+	}
+	files = append(files, clientFiles...)
 
-    return files, nil
+	return files, nil
 }
 
 // generateHandlers 生成handler代码
 func (pkgGen *HTTPPackageGenerator) generateHandlers(httpPkg *HTTPPackage) ([]*GeneratedFile, error) {
-    var files []*GeneratedFile
+	var files []*GeneratedFile
 
-    for _, service := range httpPkg.Services {
-        for _, method := range service.Methods {
-            // 构建相对于Go模块的路径
-            path := pkgGen.ProjPackage + "/" + pkgGen.HandlerDir + "/" + method.Name + ".go"
-            file := &GeneratedFile{
-                Path:    path,
-                Content: pkgGen.generateHandlerCode(service, method),
-            }
-            files = append(files, file)
-        }
-    }
+	for _, service := range httpPkg.Services {
+		for _, method := range service.Methods {
+			// 使用相对路径，符合protoc插件标准
+			path := pkgGen.HandlerDir + "/" + method.Name + ".go"
+			file := &GeneratedFile{
+				Path:    path,
+				Content: pkgGen.generateHandlerCode(service, method),
+			}
+			files = append(files, file)
+		}
+	}
 
-    return files, nil
+	return files, nil
 }
 
 // generateRouters 生成router代码
 func (pkgGen *HTTPPackageGenerator) generateRouters(httpPkg *HTTPPackage) ([]*GeneratedFile, error) {
-    var files []*GeneratedFile
+	var files []*GeneratedFile
 
-    path := pkgGen.ProjPackage + "/" + pkgGen.RouterDir + "/router.go"
-    file := &GeneratedFile{
-        Path:    path,
-        Content: pkgGen.generateRouterCode(httpPkg),
-    }
-    files = append(files, file)
+	// 使用相对路径，符合protoc插件标准
+	path := pkgGen.RouterDir + "/router.go"
+	file := &GeneratedFile{
+		Path:    path,
+		Content: pkgGen.generateRouterCode(httpPkg),
+	}
+	files = append(files, file)
 
-    return files, nil
+	return files, nil
 }
 
 // generateClients 生成client代码
 func (pkgGen *HTTPPackageGenerator) generateClients(httpPkg *HTTPPackage) ([]*GeneratedFile, error) {
-    var files []*GeneratedFile
+	var files []*GeneratedFile
 
-    // 如果没有指定client目录，则不生成客户端代码
-    if pkgGen.ClientDir == "" {
-        return files, nil
-    }
+	// 如果没有指定client目录，则不生成客户端代码
+	if pkgGen.ClientDir == "" {
+		return files, nil
+	}
 
-    for _, service := range httpPkg.Services {
-        path := pkgGen.ProjPackage + "/" + pkgGen.ClientDir + "/" + service.Name + "_client.go"
-        file := &GeneratedFile{
-            Path:    path,
-            Content: pkgGen.generateClientCode(service),
-        }
-        files = append(files, file)
-    }
+	for _, service := range httpPkg.Services {
+		// 使用相对路径，符合protoc插件标准
+		path := pkgGen.ClientDir + "/" + service.Name + "_client.go"
+		file := &GeneratedFile{
+			Path:    path,
+			Content: pkgGen.generateClientCode(service),
+		}
+		files = append(files, file)
+	}
 
-    return files, nil
+	return files, nil
 }
 
 // generateHandlerCode 生成单个handler的代码
 func (pkgGen *HTTPPackageGenerator) generateHandlerCode(service *Service, method *HTTPMethod) string {
-    return `// Code generated by protoc-gen-go-hz. DO NOT EDIT.
+	return `// Code generated by protoc-gen-go-hz ` + version.Version + `. DO NOT EDIT.
 
 package handler
 
@@ -210,7 +213,7 @@ func ` + method.Name + `(ctx context.Context, c *app.RequestContext) {
 
 // generateRouterCode 生成router代码
 func (pkgGen *HTTPPackageGenerator) generateRouterCode(httpPkg *HTTPPackage) string {
-    code := `// Code generated by protoc-gen-go-hz. DO NOT EDIT.
+	code := `// Code generated by protoc-gen-go-hz ` + version.Version + `. DO NOT EDIT.
 
 package router
 
@@ -223,21 +226,21 @@ import (
 func Register(r *server.Hertz) {
 `
 
-    for _, service := range httpPkg.Services {
-        for _, method := range service.Methods {
-            code += `    r.` + method.HTTPMethod + `("` + method.Path + `", handler.` + method.Name + `)
+	for _, service := range httpPkg.Services {
+		for _, method := range service.Methods {
+			code += `    r.` + method.HTTPMethod + `("` + method.Path + `", handler.` + method.Name + `)
 `
-        }
-    }
+		}
+	}
 
-    code += `}
+	code += `}
 `
-    return code
+	return code
 }
 
 // generateClientCode 生成client代码
 func (pkgGen *HTTPPackageGenerator) generateClientCode(service *Service) string {
-    code := `// Code generated by protoc-gen-go-hz. DO NOT EDIT.
+	code := `// Code generated by protoc-gen-go-hz ` + version.Version + `. DO NOT EDIT.
 
 package client
 
@@ -262,8 +265,8 @@ func New` + service.Name + `Client(client *client.Client) *` + service.Name + `C
 
 `
 
-    for _, method := range service.Methods {
-        code += `// ` + method.Name + ` calls ` + method.Name + ` endpoint.
+	for _, method := range service.Methods {
+		code += `// ` + method.Name + ` calls ` + method.Name + ` endpoint.
 func (c *` + service.Name + `Client) ` + method.Name + `(ctx context.Context, req *model.` + method.RequestType + `) (*model.` + method.ResponseType + `, error) {
     var resp model.` + method.ResponseType + `
     err := c.client.` + method.HTTPMethod + `(ctx, nil, "` + method.Path + `", req, &resp)
@@ -271,13 +274,13 @@ func (c *` + service.Name + `Client) ` + method.Name + `(ctx context.Context, re
 }
 
 `
-    }
+	}
 
-    return code
+	return code
 }
 
 // GeneratedFile 生成的文件
 type GeneratedFile struct {
-    Path    string
-    Content string
+	Path    string
+	Content string
 }

@@ -17,493 +17,399 @@
 package plugin
 
 import (
-    "fmt"
-    "os"
-    "path/filepath"
-    "strings"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
-    "github.com/ca-x/protoc-gen-go-hz/pkg/config"
-    "github.com/ca-x/protoc-gen-go-hz/pkg/generator"
-    "github.com/cloudwego/hertz/cmd/hz/generator/model"
-    "github.com/cloudwego/hertz/cmd/hz/meta"
-    "github.com/cloudwego/hertz/cmd/hz/util/logs"
-    "github.com/sirupsen/logrus"
-    "google.golang.org/protobuf/compiler/protogen"
-    "google.golang.org/protobuf/reflect/protoreflect"
-    "google.golang.org/protobuf/runtime/protoimpl"
+	"github.com/ca-x/protoc-gen-go-hz/pkg/config"
+	"github.com/ca-x/protoc-gen-go-hz/pkg/generator"
+	"github.com/cloudwego/hertz/cmd/hz/generator/model"
+	"github.com/cloudwego/hertz/cmd/hz/meta"
+	"github.com/cloudwego/hertz/cmd/hz/util/logs"
+	"github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/compiler/protogen"
 )
 
 // HZPlugin 是HZ protoc插件的主体
 type HZPlugin struct {
-    gen   *protogen.Plugin
-    args  *config.Argument
-    logger *logrus.Logger
+	gen    *protogen.Plugin
+	args   *config.Argument
+	logger *logrus.Logger
 }
 
 // NewHZPlugin 创建新的HZ插件实例
 func NewHZPlugin(gen *protogen.Plugin) *HZPlugin {
-    return &HZPlugin{
-        gen:    gen,
-        logger: logrus.New(),
-    }
+	return &HZPlugin{
+		gen:    gen,
+		logger: logrus.New(),
+	}
 }
 
 // Run 运行插件
 func (p *HZPlugin) Run() error {
-    // 解析插件参数
-    if err := p.parseArgs(); err != nil {
-        return fmt.Errorf("parse args failed: %w", err)
-    }
+	// 解析插件参数
+	if err := p.parseArgs(); err != nil {
+		return fmt.Errorf("parse args failed: %w", err)
+	}
 
-    // 设置日志级别
-    if p.args.Verbose {
-        p.logger.SetLevel(logrus.DebugLevel)
-        logs.SetLevel(logs.LevelDebug)
-    }
+	// 设置日志级别
+	if p.args.Verbose {
+		p.logger.SetLevel(logrus.DebugLevel)
+		logs.SetLevel(logs.LevelDebug)
+	}
 
-    p.logger.Debug("HZ protoc plugin started")
+	p.logger.Debug("HZ protoc plugin started")
 
-    // 如果只生成模型代码
-    if p.args.OnlyModel {
-        return p.handleModelCommand()
-    }
+	// 如果只生成模型代码
+	if p.args.OnlyModel {
+		return p.handleModelCommand()
+	}
 
-    // 自动检测命令类型：如果项目已存在则为update，否则为new
-    cmdType := p.autoDetectCommand()
-    p.logger.Infof("Auto-detected command type: %s", cmdType)
+	// 确定命令类型：优先使用显式指定，否则自动检测
+	// 自动检测基于项目目录结构，这对于脚手架工具是合理的
+	cmdType := p.args.CmdType
+	if cmdType == "" {
+		cmdType = p.autoDetectCommand()
+		p.args.CmdType = cmdType // 保存检测结果，避免后续重复检测
+		p.logger.Infof("Auto-detected command type: %s", cmdType)
+	} else {
+		p.logger.Infof("Using explicitly specified command type: %s", cmdType)
+	}
 
-    switch cmdType {
-    case meta.CmdNew:
-        return p.handleNewCommand()
-    case meta.CmdUpdate:
-        return p.handleUpdateCommand()
-    default:
-        return p.handleNewCommand()
-    }
+	switch cmdType {
+	case meta.CmdNew:
+		return p.handleNewCommand()
+	case meta.CmdUpdate:
+		return p.handleUpdateCommand()
+	default:
+		return p.handleNewCommand()
+	}
 }
 
 // parseArgs 解析插件参数
 func (p *HZPlugin) parseArgs() error {
-    // 从protogen插件获取参数
-    param := p.gen.Request.GetParameter()
+	// 从protogen插件获取参数
+	param := p.gen.Request.GetParameter()
 
-    p.args = &config.Argument{}
-    if param != "" {
-        params := strings.Split(param, ",")
-        if err := p.args.Unpack(params); err != nil {
-            return err
-        }
-    }
+	p.args = &config.Argument{}
+	if param != "" {
+		params := strings.Split(param, ",")
+		if err := p.args.Unpack(params); err != nil {
+			return err
+		}
+	}
 
-    // 从proto文件的go_package选项提取go module
-    if err := p.extractGoModuleFromProto(); err != nil {
-        return err
-    }
+	// 从proto文件的go_package选项提取go module
+	if err := p.extractGoModuleFromProto(); err != nil {
+		return err
+	}
 
-    return nil
+	return nil
 }
 
 // extractGoModuleFromProto 从proto文件的go_package选项提取go module
 func (p *HZPlugin) extractGoModuleFromProto() error {
-    if len(p.gen.Files) == 0 {
-        return fmt.Errorf("no proto files to generate")
-    }
+	if len(p.gen.Files) == 0 {
+		return fmt.Errorf("no proto files to generate")
+	}
 
-    for _, file := range p.gen.Files {
-        if file.Generate && file.Proto != nil {
-            goPackage := file.Proto.GetOptions().GetGoPackage()
-            if goPackage != "" {
-                // go_package通常是"path/to/module/package"的形式
-                // 我们需要提取到最后一个"/"处作为module path
-                if p.args.Gomod == "" {
-                    p.args.Gomod = goPackage
-                }
-                p.logger.Debugf("Extracted go_package from proto: %s", goPackage)
-                return nil
-            }
-        }
-    }
+	for _, file := range p.gen.Files {
+		if file.Generate && file.Proto != nil {
+			goPackage := file.Proto.GetOptions().GetGoPackage()
+			if goPackage != "" {
+				// go_package格式: "github.com/example/project/biz/model"
+				// 需要提取Go模块根路径
+				// 方法：去掉最后的package部分，通常是去掉 /biz/xxx 这样的路径
 
-    return fmt.Errorf("no go_package option found in proto files")
+				if p.args.Gomod == "" {
+					// 尝试智能提取模块根路径
+					// 如果包含 /biz/, 则提取到 /biz 之前的部分
+					moduleRoot := goPackage
+					if idx := strings.Index(goPackage, "/biz/"); idx != -1 {
+						moduleRoot = goPackage[:idx]
+					} else if idx := strings.LastIndex(goPackage, "/"); idx != -1 {
+						// 如果没有 /biz/，则去掉最后一个路径段
+						moduleRoot = goPackage[:idx]
+					}
+					p.args.Gomod = moduleRoot
+					p.logger.Debugf("Extracted go module root from proto: %s (from go_package: %s)", moduleRoot, goPackage)
+				}
+				return nil
+			}
+		}
+	}
+
+	return fmt.Errorf("no go_package option found in proto files")
 }
 
 // autoDetectCommand 自动检测命令类型
 func (p *HZPlugin) autoDetectCommand() string {
-    // 检查项目是否已存在：检查go.mod或关键目录是否存在
-    // 如果handler或router目录存在，认为项目已存在
-    outDir := p.args.OutDir
-    if outDir == "" || outDir == "." {
-        outDir = "."
-    }
+	// 检查项目是否已存在：检查go.mod或关键目录是否存在
+	// 如果handler或router目录存在，认为项目已存在
+	outDir := p.args.OutDir
+	if outDir == "" || outDir == "." {
+		outDir = "."
+	}
 
-    handlerPath := filepath.Join(outDir, p.args.HandlerDir)
-    routerPath := filepath.Join(outDir, p.args.RouterDir)
+	handlerPath := filepath.Join(outDir, p.args.HandlerDir)
+	routerPath := filepath.Join(outDir, p.args.RouterDir)
 
-    _, handlerExists := os.Stat(handlerPath)
-    _, routerExists := os.Stat(routerPath)
+	p.logger.Debugf("Auto-detect: checking handlerPath=%s, routerPath=%s", handlerPath, routerPath)
 
-    if handlerExists == nil || routerExists == nil {
-        // 至少一个目录存在，认为是update
-        return meta.CmdUpdate
-    }
+	_, handlerExists := os.Stat(handlerPath)
+	_, routerExists := os.Stat(routerPath)
 
-    // 否则是new
-    return meta.CmdNew
+	p.logger.Debugf("Auto-detect: handlerExists=%v, routerExists=%v", handlerExists, routerExists)
+
+	if handlerExists == nil || routerExists == nil {
+		// 至少一个目录存在，认为是update
+		p.logger.Debug("Auto-detect: directory exists, returning update")
+		return meta.CmdUpdate
+	}
+
+	// 否则是new
+	p.logger.Debug("Auto-detect: directory not exists, returning new")
+	return meta.CmdNew
 }
 
 // handleNewCommand 处理new命令，生成项目布局和代码
 func (p *HZPlugin) handleNewCommand() error {
-    p.logger.Info("Handling new command")
+	p.logger.Info("Handling new command")
 
-    // 1. 生成项目布局
-    if err := p.generateLayout(); err != nil {
-        return fmt.Errorf("generate layout failed: %w", err)
-    }
+	// 1. 生成项目布局
+	if err := p.generateLayout(); err != nil {
+		return fmt.Errorf("generate layout failed: %w", err)
+	}
 
-    // 2. 生成模型代码
-    if err := p.generateModels(); err != nil {
-        return fmt.Errorf("generate models failed: %w", err)
-    }
+	// 2. 生成HTTP代码 (不生成模型代码，由protoc-gen-go负责)
+	if err := p.generateHTTPCode(); err != nil {
+		return fmt.Errorf("generate http code failed: %w", err)
+	}
 
-    // 3. 生成HTTP代码
-    if err := p.generateHTTPCode(); err != nil {
-        return fmt.Errorf("generate http code failed: %w", err)
-    }
-
-    return nil
+	return nil
 }
 
 // handleUpdateCommand 处理update命令，更新现有项目
 func (p *HZPlugin) handleUpdateCommand() error {
-    p.logger.Info("Handling update command")
+	p.logger.Info("Handling update command")
 
-    // 1. 生成模型代码
-    if err := p.generateModels(); err != nil {
-        return fmt.Errorf("generate models failed: %w", err)
-    }
+	// 生成HTTP代码 (不生成模型代码，由protoc-gen-go负责)
+	if err := p.generateHTTPCode(); err != nil {
+		return fmt.Errorf("generate http code failed: %w", err)
+	}
 
-    // 2. 生成HTTP代码
-    if err := p.generateHTTPCode(); err != nil {
-        return fmt.Errorf("generate http code failed: %w", err)
-    }
-
-    return nil
+	return nil
 }
 
 // handleModelCommand 处理model命令，只生成模型代码
+// 注意: 实际的protobuf模型代码应该由protoc-gen-go生成
+// 这个命令保留是为了兼容性，但建议直接使用protoc-gen-go
 func (p *HZPlugin) handleModelCommand() error {
-    p.logger.Info("Handling model command")
-
-    return p.generateModels()
+	p.logger.Warn("Model generation should be handled by protoc-gen-go plugin")
+	p.logger.Info("Please use: protoc --go_out=. --go_opt=paths=source_relative your.proto")
+	return nil
 }
 
 // handleClientCommand 处理client命令，生成客户端代码
 func (p *HZPlugin) handleClientCommand() error {
-    p.logger.Info("Handling client command")
+	p.logger.Info("Handling client command")
 
-    // 1. 生成模型代码
-    if err := p.generateModels(); err != nil {
-        return fmt.Errorf("generate models failed: %w", err)
-    }
+	// 生成客户端代码 (不生成模型代码，由protoc-gen-go负责)
+	if err := p.generateClientCode(); err != nil {
+		return fmt.Errorf("generate client code failed: %w", err)
+	}
 
-    // 2. 生成客户端代码
-    if err := p.generateClientCode(); err != nil {
-        return fmt.Errorf("generate client code failed: %w", err)
-    }
-
-    return nil
+	return nil
 }
 
 // handleDefault 默认处理，生成所有代码
 func (p *HZPlugin) handleDefault() error {
-    p.logger.Info("Handling default generation")
+	p.logger.Info("Handling default generation")
 
-    // 生成所有类型的代码
-    return p.handleNewCommand()
+	// 生成所有类型的代码
+	return p.handleNewCommand()
 }
 
 // generateLayout 生成项目布局
 func (p *HZPlugin) generateLayout() error {
-    if p.args.OutDir == "" {
-        p.args.OutDir = "."
-    }
+	if p.args.OutDir == "" {
+		p.args.OutDir = "."
+	}
 
-    layoutGen := &generator.LayoutGenerator{
-        TemplateGenerator: generator.TemplateGenerator{
-            OutputDir: p.args.OutDir,
-            Excludes:  p.args.Excludes,
-        },
-    }
+	layoutGen := &generator.LayoutGenerator{
+		TemplateGenerator: generator.TemplateGenerator{
+			OutputDir: p.args.OutDir,
+			Excludes:  p.args.Excludes,
+		},
+	}
 
-    layout := generator.Layout{
-        GoModule:        p.args.Gomod,
-        ServiceName:     p.args.ServiceName,
-        UseApacheThrift: false, // protobuf项目不使用thrift
-        HasIdl:          true,
-        ModelDir:        p.args.ModelDir,
-        HandlerDir:      p.args.HandlerDir,
-        RouterDir:       p.args.RouterDir,
-        NeedGoMod:       p.args.NeedGoMod,
-    }
+	layout := generator.Layout{
+		GoModule:        p.args.Gomod,
+		ServiceName:     p.args.ServiceName,
+		UseApacheThrift: false, // protobuf项目不使用thrift
+		HasIdl:          true,
+		ModelDir:        p.args.ModelDir,
+		HandlerDir:      p.args.HandlerDir,
+		RouterDir:       p.args.RouterDir,
+		NeedGoMod:       p.args.NeedGoMod,
+	}
 
-    if err := layoutGen.GenerateByService(layout); err != nil {
-        return err
-    }
+	if err := layoutGen.GenerateByService(layout); err != nil {
+		return err
+	}
 
-    return layoutGen.Persist()
+	return layoutGen.Persist()
 }
 
 // generateModels 生成模型代码
+// 已废弃: protobuf模型代码应该由protoc-gen-go生成
+// 保留此函数仅为向后兼容
 func (p *HZPlugin) generateModels() error {
-    for _, file := range p.gen.Files {
-        if file.Generate {
-            if err := p.generateFile(file); err != nil {
-                return fmt.Errorf("generate file %s failed: %w", file.Proto.GetName(), err)
-            }
-        }
-    }
-    return nil
+	p.logger.Warn("generateModels is deprecated, use protoc-gen-go instead")
+	return nil
 }
 
 // generateFile 生成单个protobuf文件的模型代码
+// 已废弃: protobuf模型代码应该由protoc-gen-go生成
 func (p *HZPlugin) generateFile(file *protogen.File) error {
-    // 使用hz的protobuf生成逻辑
-    filename := file.GeneratedFilenamePrefix + ".pb.go"
-    g := p.gen.NewGeneratedFile(filename, file.GoImportPath)
-    
-    // 生成基本的文件头
-    g.P("// Code generated by protoc-gen-go-hz. DO NOT EDIT.")
-    g.P("// versions:")
-    g.P("// \tprotoc-gen-go v1.31.0")
-    g.P("// \tprotoc        v3.21.0")
-    g.P("// source: ", file.Proto.GetName())
-    g.P()
-    g.P("package ", file.GoPackageName)
-    g.P()
-
-    // 生成基本的导入
-    g.P("import (")
-    g.P(`protoreflect "google.golang.org/protobuf/reflect/protoreflect"`)
-    g.P(`protoimpl "google.golang.org/protobuf/runtime/protoimpl"`)
-    g.P(`reflect "reflect"`)
-    g.P(`sync "sync"`)
-    g.P(")")
-    g.P()
-
-    // 生成版本检查
-    g.P("const (")
-    g.P("// Verify that this generated code is sufficiently up-to-date.")
-    g.P("_ = protoimpl.EnforceVersion(", protoimpl.GenVersion, " - ", protoimpl.MinVersion, ")")
-    g.P("// Verify that runtime/protoimpl is sufficiently up-to-date.")
-    g.P("_ = protoimpl.EnforceVersion(", protoimpl.MaxVersion, " - ", protoimpl.GenVersion, ")")
-    g.P(")")
-    g.P()
-
-    // 生成消息和枚举
-    for _, enum := range file.Enums {
-        p.generateEnum(g, enum)
-    }
-    
-    for _, message := range file.Messages {
-        p.generateMessage(g, message)
-    }
-
-    return nil
+	p.logger.Warn("generateFile is deprecated, use protoc-gen-go instead")
+	return nil
 }
 
 // generateEnum 生成枚举
+// 已废弃: protobuf模型代码应该由protoc-gen-go生成
 func (p *HZPlugin) generateEnum(g *protogen.GeneratedFile, enum *protogen.Enum) {
-    g.P("type ", enum.GoIdent, " int32")
-    g.P("const (")
-    for _, value := range enum.Values {
-        g.P(value.GoIdent, " ", enum.GoIdent, " = ", value.Desc.Number())
-    }
-    g.P(")")
-    g.P()
-
-    // 生成枚举的变量和方法
-    g.P("var (")
-    g.P(enum.GoIdent, "_name = map[int32]string{")
-    for _, value := range enum.Values {
-        g.P(value.Desc.Number(), ": ", `"` + string(value.Desc.Name()) + `",`)
-    }
-    g.P("}")
-    g.P(enum.GoIdent, "_value = map[string]int32{")
-    for _, value := range enum.Values {
-        g.P(`"` + string(value.Desc.Name()) + `": `, value.Desc.Number(), ",")
-    }
-    g.P("}")
-    g.P(")")
-    g.P()
-
-    g.P("func (x ", enum.GoIdent, ") Enum() *", enum.GoIdent, " {")
-    g.P("p := new(", enum.GoIdent, ")")
-    g.P("*p = x")
-    g.P("return p")
-    g.P("}")
-    g.P()
-
-    g.P("func (x ", enum.GoIdent, ") String() string {")
-    g.P("return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))")
-    g.P("}")
-    g.P()
-
-    g.P("func (*", enum.GoIdent, ") Descriptor() protoreflect.EnumDescriptor {")
-    g.P("return file_", enum.GoIdent.GoName, "_proto.EnumTypes()[0].Descriptor()")
-    g.P("}")
-    g.P()
+	// 不再生成枚举代码
 }
 
 // generateMessage 生成消息
+// 已废弃: protobuf模型代码应该由protoc-gen-go生成
 func (p *HZPlugin) generateMessage(g *protogen.GeneratedFile, message *protogen.Message) {
-    if message.Desc.IsMapEntry() {
-        return
-    }
-
-    g.P("type ", message.GoIdent, " struct {")
-    for _, field := range message.Fields {
-        // 获取字段类型
-        var fieldType string
-        switch field.Desc.Kind() {
-        case protoreflect.StringKind:
-            fieldType = "string"
-        case protoreflect.Int32Kind:
-            fieldType = "int32"
-        case protoreflect.Int64Kind:
-            fieldType = "int64"
-        case protoreflect.BoolKind:
-            fieldType = "bool"
-        default:
-            fieldType = "string" // 默认为string
-        }
-        
-        g.P(field.GoName, " ", fieldType, " `", string(field.Desc.Name()), ":", string(field.Desc.Number()), "`")
-    }
-    g.P("}")
-    g.P()
-
-    // 生成基本方法
-    g.P("func (x *", message.GoIdent, ") Reset() {")
-    g.P("*x = ", message.GoIdent, "{}")
-    g.P("}")
-    g.P()
-
-    g.P("func (x *", message.GoIdent, ") String() string {")
-    g.P("return protoimpl.X.MessageStringOf(x)")
-    g.P("}")
-    g.P()
-
-    g.P("func (*", message.GoIdent, ") ProtoMessage() {}")
-    g.P()
-
-    g.P("func (x *", message.GoIdent, ") Descriptor() protoreflect.MessageDescriptor {")
-    g.P("return file_", message.GoIdent.GoName, "_proto.MsgTypes()[0].Descriptor()")
-    g.P("}")
-    g.P()
+	// 不再生成消息代码
 }
 
 // generateHTTPCode 生成HTTP相关代码
 func (p *HZPlugin) generateHTTPCode() error {
-    p.logger.Debugf("Generating HTTP code with args: %+v", p.args)
+	p.logger.Debugf("Generating HTTP code with args: %+v", p.args)
 
-    // 自动检测命令类型（如果项目已存在则为update，否则为new）
-    cmdType := p.autoDetectCommand()
+	// 使用已经确定的命令类型（在Run()中已经检测过）
+	cmdType := p.args.CmdType
+	if cmdType == "" {
+		cmdType = p.autoDetectCommand()
+	}
 
-    // 创建HTTP包生成器
-    pkgGen := &generator.HTTPPackageGenerator{
-        CmdType:        cmdType,
-        ProjPackage:    p.args.Gomod,
-        HandlerDir:     p.args.HandlerDir,
-        RouterDir:      p.args.RouterDir,
-        ModelDir:       p.args.ModelDir,
-        ClientDir:      p.args.ClientDir,
-        BaseDomain:     p.args.BaseDomain,
-        HandlerByMethod: p.args.HandlerByMethod,
-        SortRouter:     p.args.SortRouter,
-    }
+	// 创建HTTP包生成器
+	pkgGen := &generator.HTTPPackageGenerator{
+		CmdType:         cmdType,
+		ProjPackage:     p.args.Gomod,
+		HandlerDir:      p.args.HandlerDir,
+		RouterDir:       p.args.RouterDir,
+		ModelDir:        p.args.ModelDir,
+		ClientDir:       p.args.ClientDir,
+		BaseDomain:      p.args.BaseDomain,
+		HandlerByMethod: p.args.HandlerByMethod,
+		SortRouter:      p.args.SortRouter,
+	}
 
-    p.logger.Debugf("Created HTTP package generator: %+v", pkgGen)
+	p.logger.Debugf("Created HTTP package generator: %+v", pkgGen)
 
-    // 初始化生成器
-    if err := pkgGen.Init(); err != nil {
-        return fmt.Errorf("init http package generator failed: %w", err)
-    }
+	// 初始化生成器
+	if err := pkgGen.Init(); err != nil {
+		return fmt.Errorf("init http package generator failed: %w", err)
+	}
 
-    // 构建HTTP包数据
-    httpPkg := p.buildHTTPPackage()
-    p.logger.Debugf("Built HTTP package: %+v", httpPkg)
-    
-    // 生成代码
-    files, err := pkgGen.Generate(httpPkg)
-    if err != nil {
-        return err
-    }
+	// 构建HTTP包数据
+	httpPkg := p.buildHTTPPackage()
+	p.logger.Debugf("Built HTTP package: %+v", httpPkg)
 
-    p.logger.Debugf("Generated %d files", len(files))
+	// 生成代码
+	files, err := pkgGen.Generate(httpPkg)
+	if err != nil {
+		return err
+	}
 
-    // 将生成的文件添加到protogen响应
-    for _, file := range files {
-        p.logger.Debugf("Adding file: %s", file.Path)
-        g := p.gen.NewGeneratedFile(file.Path, p.gen.Files[0].GoImportPath)
-        g.P(file.Content)
-    }
+	p.logger.Debugf("Generated %d files", len(files))
 
-    return nil
+	// 将生成的文件添加到protogen响应
+	for _, file := range files {
+		p.logger.Debugf("Adding file: %s", file.Path)
+
+		// 根据文件路径确定Go import路径
+		// 例如: biz/handler/SayHello.go -> github.com/example/project/biz/handler
+		goImportPath := p.buildGoImportPath(file.Path)
+
+		g := p.gen.NewGeneratedFile(file.Path, protogen.GoImportPath(goImportPath))
+		g.P(file.Content)
+	}
+
+	return nil
 }
 
 // generateClientCode 生成客户端代码
 func (p *HZPlugin) generateClientCode() error {
-    // 客户端代码生成逻辑
-    p.logger.Info("Generating client code")
-    return nil
+	// 客户端代码生成逻辑
+	p.logger.Info("Generating client code")
+	return nil
 }
 
 // buildHTTPPackage 构建HTTP包数据结构
 func (p *HZPlugin) buildHTTPPackage() *generator.HTTPPackage {
-    httpPkg := &generator.HTTPPackage{
-        IdlName: p.getMainIDLName(),
-        Package: p.args.Gomod,
-        Services: []*generator.Service{},
-        Models:   []*model.Model{},
-        RouterInfo: &generator.Router{},
-    }
+	httpPkg := &generator.HTTPPackage{
+		IdlName:    p.getMainIDLName(),
+		Package:    p.args.Gomod,
+		Services:   []*generator.Service{},
+		Models:     []*model.Model{},
+		RouterInfo: &generator.Router{},
+	}
 
-    // 解析protobuf文件，提取服务信息
-    for _, file := range p.gen.Files {
-        if file.Generate {
-            for _, service := range file.Services {
-                svc := &generator.Service{
-                    Name:   string(service.GoName),
-                    Methods: []*generator.HTTPMethod{},
-                    ClientMethods: []*generator.ClientMethod{},
-                    Models: []*model.Model{},
-                    BaseDomain: p.args.BaseDomain,
-                }
+	// 解析protobuf文件，提取服务信息
+	for _, file := range p.gen.Files {
+		if file.Generate {
+			for _, service := range file.Services {
+				svc := &generator.Service{
+					Name:          string(service.GoName),
+					Methods:       []*generator.HTTPMethod{},
+					ClientMethods: []*generator.ClientMethod{},
+					Models:        []*model.Model{},
+					BaseDomain:    p.args.BaseDomain,
+				}
 
-                // 提取方法信息
-                for _, method := range service.Methods {
-                    httpMethod := &generator.HTTPMethod{
-                        Name:         string(method.GoName),
-                        HTTPMethod:   "POST", // 默认POST，可以通过注释配置
-                        Path:         "/" + string(service.GoName) + "/" + string(method.GoName),
-                        RequestType:  string(method.Input.GoIdent.GoName),
-                        ResponseType: string(method.Output.GoIdent.GoName),
-                    }
-                    svc.Methods = append(svc.Methods, httpMethod)
-                }
+				// 提取方法信息
+				for _, method := range service.Methods {
+					httpMethod := &generator.HTTPMethod{
+						Name:         string(method.GoName),
+						HTTPMethod:   "POST", // 默认POST，可以通过注释配置
+						Path:         "/" + string(service.GoName) + "/" + string(method.GoName),
+						RequestType:  string(method.Input.GoIdent.GoName),
+						ResponseType: string(method.Output.GoIdent.GoName),
+					}
+					svc.Methods = append(svc.Methods, httpMethod)
+				}
 
-                httpPkg.Services = append(httpPkg.Services, svc)
-            }
-        }
-    }
+				httpPkg.Services = append(httpPkg.Services, svc)
+			}
+		}
+	}
 
-    return httpPkg
+	return httpPkg
+}
+
+// buildGoImportPath 根据文件路径构建Go import路径
+func (p *HZPlugin) buildGoImportPath(filePath string) string {
+	// 从文件路径提取包路径
+	// 例如: biz/handler/SayHello.go -> biz/handler
+	dir := filepath.Dir(filePath)
+
+	// 拼接模块根路径
+	// 例如: github.com/example/project + biz/handler -> github.com/example/project/biz/handler
+	return p.args.Gomod + "/" + dir
 }
 
 // getMainIDLName 获取主IDL文件名
 func (p *HZPlugin) getMainIDLName() string {
-    if len(p.gen.Request.FileToGenerate) > 0 {
-        return filepath.Base(p.gen.Request.FileToGenerate[0])
-    }
-    return "unknown.proto"
+	if len(p.gen.Request.FileToGenerate) > 0 {
+		return filepath.Base(p.gen.Request.FileToGenerate[0])
+	}
+	return "unknown.proto"
 }

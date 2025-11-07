@@ -14,27 +14,13 @@
  * limitations under the License.
  */
 
-package main
+package version
 
-import (
-    "os"
+// Version 插件版本
+const Version = "v0.1.0"
 
-    "github.com/ca-x/protoc-gen-go-hz/pkg/plugin"
-    "github.com/sirupsen/logrus"
-    "google.golang.org/protobuf/compiler/protogen"
-)
+// ProtocGenGoVersion 支持的protoc-gen-go版本
+const ProtocGenGoVersion = "v1.31.0"
 
-func main() {
-    // 使用proto-gen-star风格的插件入口
-    protogen.Options{}.Run(func(gen *protogen.Plugin) error {
-        // 创建HZ插件实例
-        hzPlugin := plugin.NewHZPlugin(gen)
-        
-        // 设置日志
-        logrus.SetOutput(os.Stderr)
-        logrus.SetLevel(logrus.InfoLevel)
-        
-        // 运行插件
-        return hzPlugin.Run()
-    })
-}
+// MinProtocVersion 最低protoc版本要求
+const MinProtocVersion = "v3.21.0"

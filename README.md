@@ -34,8 +34,18 @@ protoc --go-hz_out=. example.proto
 ```
 
 This command will automatically determine the operation type based on the existing project structure:
-- If the project doesn't exist, it will create a new project (by detecting handler/ and router/ directories)
-- If the project exists, it will generate code in the existing project
+- If the project doesn't exist, it will create a new project (new command)
+- If the project exists, it will update code in the existing project (update command)
+
+If needed, you can also override the automatic detection by explicitly specifying the command type using `cmd_type` parameter:
+
+```bash
+# Force new project creation (override auto-detection)
+protoc --go-hz_out=. --go-hz_opt=cmd_type=new example.proto
+
+# Force update (override auto-detection)
+protoc --go-hz_out=. --go-hz_opt=cmd_type=update example.proto
+```
 
 #### Common Use Cases
 
@@ -83,7 +93,8 @@ protoc --go-hz_out=. --go-hz_opt=client_dir=biz/client example.proto
 | `model_dir` | string | "biz/model" | Model code output directory |
 | `router_dir` | string | "biz/router" | Router code output directory |
 | `client_dir` | string | "biz/client" | Client code output directory |
-| `model` | bool | false | Generate model code only (OnlyModel flag) |
+| `cmd_type` | string | "" | Command type: "new", "update", "model", "client" (optional, auto-detected by default) |
+| `model` | bool | false | Generate model code only (OnlyModel flag) - **Note: use protoc-gen-go instead** |
 | `verbose` | bool | false | Enable verbose output |
 | `base_domain` | string | "" | Base domain |
 | `service` | string | "" | Service name |
@@ -132,7 +143,52 @@ message HelloReply {
 2. **Simplified Configuration**: Configure via command-line parameters, no .hz file needed
 3. **Standard protoc Interface**: Conforms to the protoc plugin standard
 4. **Modular Design**: Clear separation of different generation functions
-5. **Automatic Detection**: Automatically extract module information and command type from proto files
+5. **Automatic Detection**: Automatically extract module information and detect command type from project structure
+6. **Follows protoc Plugin Best Practices**:
+   - Model code generation delegated to `protoc-gen-go` (single responsibility)
+   - Uses relative paths for output files
+   - Graceful handling of unknown parameters
+   - Smart auto-detection with manual override support
+
+### Best Practices
+
+#### Recommended Usage Pattern
+
+For best results, use this plugin together with `protoc-gen-go`:
+
+```bash
+# Generate both protobuf models and Hertz HTTP code
+protoc \
+  --go_out=. --go_opt=paths=source_relative \
+  --go-hz_out=. --go-hz_opt=handler_dir=biz/handler,router_dir=biz/router \
+  example.proto
+```
+
+The plugin will automatically detect whether to create a new project or update an existing one.
+
+#### When to Specify `cmd_type`
+
+The `cmd_type` parameter is optional. Specify it only when you need to override the auto-detection:
+
+```bash
+# Force new project creation even if directories exist
+protoc --go-hz_out=. --go-hz_opt=cmd_type=new example.proto
+
+# Force update even in an empty directory
+protoc --go-hz_out=. --go-hz_opt=cmd_type=update example.proto
+```
+
+#### Use protoc-gen-go for Models
+
+Don't use the `model=true` option. Instead, let `protoc-gen-go` handle model generation:
+
+```bash
+# Correct way
+protoc --go_out=. --go_opt=paths=source_relative example.proto
+
+# Not recommended
+protoc --go-hz_out=. --go-hz_opt=model=true example.proto
+```
 
 ### Usage with Buf
 
