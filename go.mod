@@ -7,6 +7,7 @@ require (
 	github.com/cloudwego/hertz/cmd/hz v0.9.7
 	github.com/sirupsen/logrus v1.9.3
 	google.golang.org/protobuf v1.36.10
+	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
@@ -27,5 +28,4 @@ require (
 	golang.org/x/arch v0.0.0-20210923205945-b76863e36670 // indirect
 	golang.org/x/sys v0.24.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 )

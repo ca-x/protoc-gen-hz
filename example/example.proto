@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package example;
 
-option go_package = "github.com/ca-x/protoc-gen-go-hz/example/greeter";
+option go_package = "github.com/ca-x/protoc-gen-go-hz/example/biz/model";
 
 // The greeting service definition.
 service Greeter {

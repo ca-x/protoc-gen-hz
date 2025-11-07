@@ -301,15 +301,16 @@ func (p *HZPlugin) generateHTTPCode() error {
 
 	// 创建HTTP包生成器
 	pkgGen := &generator.HTTPPackageGenerator{
-		CmdType:         cmdType,
-		ProjPackage:     p.args.Gomod,
-		HandlerDir:      p.args.HandlerDir,
-		RouterDir:       p.args.RouterDir,
-		ModelDir:        p.args.ModelDir,
-		ClientDir:       p.args.ClientDir,
-		BaseDomain:      p.args.BaseDomain,
-		HandlerByMethod: p.args.HandlerByMethod,
-		SortRouter:      p.args.SortRouter,
+		CmdType:          cmdType,
+		ProjPackage:      p.args.Gomod,
+		HandlerDir:       p.args.HandlerDir,
+		RouterDir:        p.args.RouterDir,
+		ModelDir:         p.args.ModelDir,
+		ClientDir:        p.args.ClientDir,
+		BaseDomain:       p.args.BaseDomain,
+		HandlerByMethod:  p.args.HandlerByMethod,
+		SortRouter:       p.args.SortRouter,
+		CustomizePackage: p.args.CustomizePackage,
 	}
 
 	p.logger.Debugf("Created HTTP package generator: %+v", pkgGen)
@@ -355,9 +356,22 @@ func (p *HZPlugin) generateClientCode() error {
 
 // buildHTTPPackage 构建HTTP包数据结构
 func (p *HZPlugin) buildHTTPPackage() *generator.HTTPPackage {
+	// 获取 model 包路径（从 proto 的 go_package 中获取）
+	modelPkg := ""
+	for _, file := range p.gen.Files {
+		if file.Generate && file.Proto != nil {
+			goPackage := file.Proto.GetOptions().GetGoPackage()
+			if goPackage != "" {
+				modelPkg = goPackage
+				break
+			}
+		}
+	}
+
 	httpPkg := &generator.HTTPPackage{
 		IdlName:    p.getMainIDLName(),
 		Package:    p.args.Gomod,
+		ModelPkg:   modelPkg, // 添加 model 包路径
 		Services:   []*generator.Service{},
 		Models:     []*model.Model{},
 		RouterInfo: &generator.Router{},
