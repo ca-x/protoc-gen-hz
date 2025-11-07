@@ -17,7 +17,7 @@
 package version
 
 // Version 插件版本
-const Version = "v0.1.0"
+const Version = "v0.9.8"
 
 // ProtocGenGoVersion 支持的protoc-gen-go版本
 const ProtocGenGoVersion = "v1.31.0"
